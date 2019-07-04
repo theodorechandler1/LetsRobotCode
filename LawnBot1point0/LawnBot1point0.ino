@@ -1,3 +1,6 @@
+  #include <Adafruit_INA219.h>
+  
+  
   //Configurable Values
   static int defaultDriveSpeed = 128; //Maximum speed we will allow the wheelchair to reach (range of 1 to 255)
   static int defaultTurnSpeed = 255; //Maximum speed we will allow the wheelchair to turn (range of 1 to 255)
@@ -8,7 +11,8 @@
   static int motorRampTimeMillis = 100; //Time between acceleration steps
   static int leftMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
   static int rightMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
-  
+  static float lowVoltageCutoff = 6 * 3.2; //Number of cells in series X the low voltage cutoff
+  static int lowVoltageCountMax = 10; //Number of times the checkBelowMinVoltage function can be under the minimum before returning true
   
   //Nonconfigurable Values
   //Driving variables
@@ -22,27 +26,31 @@
   //Data for serial events
   String inputString = ""; // A string to hold incoming serial data
   bool stringComplete = false; // Indicates whether the string is complete
+  
+  //Voltage Variables
+  Adafruit_INA219 ina219;
+  int lowVoltageCount = 0; //Number of consecutive times the sensor has read under the minimum voltage
+  float batteryVoltage = 0;
 
   //Pin Definitions
-  static int motorGlobalBrake = 2;
-  static int leftReverseEnable = 5;
-  static int leftForwardEnable = 6;
-  static int rightReverseEnable = 9;
-  static int rightForwardEnable = 10;
-  static int rightForwardPWM = 7;
-  static int rightReversePWM = 8;
-  static int leftForwardPWM = 3;
-  static int leftReversePWM = 4;
-  static int leftForwardOvercurrent = 52;
-  static int leftReverseOvercurrent = 53;
-  static int rightForwardOvercurrent = 50;
-  static int rightReverseOvercurrent = 51;
+  static int leftReverseEnable = 8;
+  static int leftForwardEnable = 7;
+  static int rightReverseEnable = 3;
+  static int rightForwardEnable = 2;
+  static int rightForwardPWM = 6;
+  static int rightReversePWM = 5;
+  static int leftForwardPWM = 11;
+  static int leftReversePWM = 9;
+  static int leftForwardOvercurrent = A2;
+  static int leftReverseOvercurrent = A3;
+  static int rightForwardOvercurrent = A6;
+  static int rightReverseOvercurrent = A7;
 
 
 void setup() {
+  //Setup Voltage Sensing 
+  ina219.begin();
   //Setup motor controller outputs
-  pinMode(motorGlobalBrake, OUTPUT);
-  //Setup left motor inputs & outputs and default to off
   pinMode(leftReverseEnable,OUTPUT);
   digitalWrite(leftReverseEnable, LOW);
   pinMode(leftForwardEnable,OUTPUT);
@@ -77,11 +85,15 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Startup Complete");
   //disable the brakes now that we are all initialized
-  digitalWrite(motorGlobalBrake, LOW);
 
 }
 
 void loop() {
+  if(checkBelowMinVoltage()){
+    Serial.println("Min battery voltage reached. Disabling motors to protect the battery");
+    Serial.print("Battery Voltage is: "); Serial.print(batteryVoltage); Serial.println("V");
+    haltSafe();
+  }
   if(debug){Serial.println("Current speed: L:" + String(leftWheelSpeed) + " R:" + String(rightWheelSpeed) + " LD:" + String(leftWheelDesiredSpeed) + " RD:" + String(rightWheelDesiredSpeed));}
   //If we have exceeded the maximum amount of drivetime stop.
   if(millis() > stopTime){
@@ -95,6 +107,20 @@ void loop() {
   }
 }
 
+bool checkBelowMinVoltage(){ //Checks to see if we are below the minimum cutoff voltage for more than lowVoltageCountMax and if so returns true
+  batteryVoltage = ina219.getBusVoltage_V();
+  if(batteryVoltage < lowVoltageCutoff and batteryVoltage > 5.0){ //Check to see if we are below the low voltage cutoff and above having the battery disconnected
+    lowVoltageCount += 1; 
+  }else{
+    lowVoltageCount = 0;
+  }
+
+  if(lowVoltageCount >= lowVoltageCountMax){
+    return true;
+  }else{
+    return false;
+  }
+}
 
 void handleSerialMessage(){
     if(debug){Serial.println(inputString);}
@@ -119,6 +145,8 @@ void handleSerialMessage(){
     }else if(nextDirection == "r"){ //Turn right at half speed
       leftWheelDesiredSpeed = defaultTurnSpeed * -1;
       rightWheelDesiredSpeed = defaultTurnSpeed;
+    }else if(nextDirection == "v"){ //Not really a direction. May need to go back and clean up variable names to better indicate that this is a command
+      Serial.print("Bus Voltage:   "); Serial.print(ina219.getBusVoltage_V()); Serial.println(" V");
     }else if(nextDirection == "stop"){ //Stop
       leftWheelDesiredSpeed = 0;
       rightWheelDesiredSpeed = 0;
@@ -143,19 +171,16 @@ void serialEvent() {
 
 
 void setSpeedMotor(){
-  if(digitalRead(motorGlobalBrake) != LOW){ //Something has gone wrong and the motors are moving while locked. Fail safely
-    haltSafe();
-  }else{
-    //setSpeedLeftMotor(leftWheelDesiredSpeed);
-    //setSpeedRightMotor(rightWheelDesiredSpeed);
-    if(millis() >= nextMotorRampTime){
-      setSpeedLeftMotor(getNextSpeedValue(leftWheelSpeed,leftWheelDesiredSpeed,motorRampSpeed));
-      setSpeedRightMotor(getNextSpeedValue(rightWheelSpeed,rightWheelDesiredSpeed,motorRampSpeed));
-      //Add a delay until changing the motor ramp time 
-      nextMotorRampTime = millis() + motorRampTimeMillis;
-    }
+  //setSpeedLeftMotor(leftWheelDesiredSpeed);
+  //setSpeedRightMotor(rightWheelDesiredSpeed);
+  if(millis() >= nextMotorRampTime){
+    setSpeedLeftMotor(getNextSpeedValue(leftWheelSpeed,leftWheelDesiredSpeed,motorRampSpeed));
+    setSpeedRightMotor(getNextSpeedValue(rightWheelSpeed,rightWheelDesiredSpeed,motorRampSpeed));
+    //Add a delay until changing the motor ramp time 
+    nextMotorRampTime = millis() + motorRampTimeMillis;
   }
 }
+
 int getNextSpeedValue(int currentSpeed, int desiredSpeed, int motorRampSpeed){ //TODO Make ramping to 0 happen very quickly (stop happens fast)
   int localMotorRampSpeed = motorRampSpeed;
   if((currentSpeed > 0 and desiredSpeed <= 0) or (currentSpeed < 0 and desiredSpeed >= 0)){ //Ramp quickly to stop
@@ -232,7 +257,7 @@ bool hasOvercurrent(){
 }
 
 //Fail safe mode. Will disable the motors and lock the wheels.
-//Enters infinate loop and requires arduino restart to exit
+//Enters inf loop and requires arduino restart to exit
 void haltSafe(){
   Serial.println("Entered halt safe. Shutting off all motor outputs");
   digitalWrite(leftReverseEnable, LOW);
@@ -243,7 +268,6 @@ void haltSafe(){
   digitalWrite(leftForwardPWM, LOW);
   digitalWrite(rightReversePWM, LOW);
   digitalWrite(leftReversePWM, LOW);
-  digitalWrite(motorGlobalBrake, LOW);
   Serial.println("All motor pins set to zero");
   Serial.println("Entering inf loop");
   while(true){
