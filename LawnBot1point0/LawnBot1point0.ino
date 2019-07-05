@@ -33,6 +33,7 @@
   float batteryVoltage = 0;
 
   //Pin Definitions
+  static int bladeRelay = 4;
   static int leftReverseEnable = 8;
   static int leftForwardEnable = 7;
   static int rightReverseEnable = 3;
@@ -50,7 +51,12 @@
 void setup() {
   //Setup Voltage Sensing 
   ina219.begin();
-  //Setup motor controller outputs
+
+  //Setup blade relay controls
+  pinMode(bladeRelay,OUTPUT);
+  digitalWrite(bladeRelay, LOW);
+  
+  //Setup left motor controller inputs & outputs and default to off
   pinMode(leftReverseEnable,OUTPUT);
   digitalWrite(leftReverseEnable, LOW);
   pinMode(leftForwardEnable,OUTPUT);
@@ -134,19 +140,21 @@ void handleSerialMessage(){
     if(debug){Serial.println(nextDirection);}
     stopTime = driveTimeMilliseconds + millis(); //Calculate and store future stop time
     if(nextDirection == "f"){ //Drive forward
-      leftWheelDesiredSpeed = defaultDriveSpeed;
-      rightWheelDesiredSpeed = defaultDriveSpeed;
-    }else if(nextDirection == "b"){ //Drive backward
-      leftWheelDesiredSpeed = defaultDriveSpeed * -1;
-      rightWheelDesiredSpeed = defaultDriveSpeed * -1;
-    }else if(nextDirection == "l"){ //Turn left at half speed
-      leftWheelDesiredSpeed = defaultTurnSpeed;
-      rightWheelDesiredSpeed = defaultTurnSpeed  * -1;
-    }else if(nextDirection == "r"){ //Turn right at half speed
       leftWheelDesiredSpeed = defaultTurnSpeed * -1;
       rightWheelDesiredSpeed = defaultTurnSpeed;
+    }else if(nextDirection == "b"){ //Drive backward
+      leftWheelDesiredSpeed = defaultTurnSpeed;
+      rightWheelDesiredSpeed = defaultTurnSpeed  * -1;
+    }else if(nextDirection == "l"){ //Turn left
+      leftWheelDesiredSpeed = defaultDriveSpeed;
+      rightWheelDesiredSpeed = defaultDriveSpeed;
+    }else if(nextDirection == "r"){ //Turn right
+      leftWheelDesiredSpeed = defaultDriveSpeed * -1;
+      rightWheelDesiredSpeed = defaultDriveSpeed * -1;
     }else if(nextDirection == "v"){ //Not really a direction. May need to go back and clean up variable names to better indicate that this is a command
       Serial.print("Bus Voltage:   "); Serial.print(ina219.getBusVoltage_V()); Serial.println(" V");
+    }else if(nextDirection == "m"){ //Toggle the blade state
+      digitalWrite(bladeRelay, !digitalRead(bladeRelay));
     }else if(nextDirection == "stop"){ //Stop
       leftWheelDesiredSpeed = 0;
       rightWheelDesiredSpeed = 0;
@@ -260,6 +268,7 @@ bool hasOvercurrent(){
 //Enters inf loop and requires arduino restart to exit
 void haltSafe(){
   Serial.println("Entered halt safe. Shutting off all motor outputs");
+  digitalWrite(bladeRelay, LOW);
   digitalWrite(leftReverseEnable, LOW);
   digitalWrite(rightReverseEnable, LOW);
   digitalWrite(leftForwardEnable, LOW);
