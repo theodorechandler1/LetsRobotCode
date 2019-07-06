@@ -131,7 +131,7 @@ bool checkBelowMinVoltage(){ //Checks to see if we are below the minimum cutoff 
     lowVoltageState = false;
   }
 
-  if(currentTime >= lowVoltageStopTime){
+  if(currentTime >= lowVoltageStopTime and lowVoltageState == true){
     return true;
   }else{
     return false;

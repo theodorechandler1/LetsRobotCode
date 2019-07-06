@@ -11,8 +11,8 @@
   static int motorRampTimeMillis = 100; //Time between acceleration steps
   static int leftMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
   static int rightMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
-  static float lowVoltageCutoff = 6 * 3.2; //Number of cells in series X the low voltage cutoff
-  static int lowVoltageCountMax = 10; //Number of times the checkBelowMinVoltage function can be under the minimum before returning true
+  static float lowVoltageCutoff = 6 * 2.9; //Number of cells in series X the low voltage cutoff
+  static int lowVoltageMillisecondsMax = 30 * 1000; //Number of times the checkBelowMinVoltage function can be under the minimum before returning true
   
   //Nonconfigurable Values
   //Driving variables
@@ -31,6 +31,8 @@
   Adafruit_INA219 ina219;
   int lowVoltageCount = 0; //Number of consecutive times the sensor has read under the minimum voltage
   float batteryVoltage = 0;
+  unsigned long lowVoltageStopTime = 0;
+  bool lowVoltageState = false;
 
   //Pin Definitions
   static int bladeRelay = 4;
@@ -115,13 +117,21 @@ void loop() {
 
 bool checkBelowMinVoltage(){ //Checks to see if we are below the minimum cutoff voltage for more than lowVoltageCountMax and if so returns true
   batteryVoltage = ina219.getBusVoltage_V();
+  unsigned long currentTime = millis();
   if(batteryVoltage < lowVoltageCutoff and batteryVoltage > 5.0){ //Check to see if we are below the low voltage cutoff and above having the battery disconnected
-    lowVoltageCount += 1; 
+    //Battery voltage is low 
+    if(lowVoltageState == true){
+      //Pass. Nothing to do here
+    }else{
+      lowVoltageStopTime = currentTime + currentTime;
+      lowVoltageState = true;
+    }
   }else{
-    lowVoltageCount = 0;
+    //Battery voltage is high
+    lowVoltageState = false;
   }
 
-  if(lowVoltageCount >= lowVoltageCountMax){
+  if(currentTime >= lowVoltageStopTime){
     return true;
   }else{
     return false;
