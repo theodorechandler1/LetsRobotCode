@@ -11,7 +11,7 @@
   static int motorRampTimeMillis = 100; //Time between acceleration steps
   static int leftMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
   static int rightMotorSpeedOffset = 0; //TODO: Implement speed offset in order to maintain a straight drive
-  static float lowVoltageCutoff = 6 * 2.9; //Number of cells in series X the low voltage cutoff
+  static float lowVoltageCutoff = 6 * 3.2; //Number of cells in series X the low voltage cutoff
   static int lowVoltageMillisecondsMax = 30 * 1000; //Number of times the checkBelowMinVoltage function can be under the minimum before returning true
   
   //Nonconfigurable Values
