@@ -54,7 +54,7 @@ void setup() {
 
   //Setup blade relay controls
   pinMode(bladeRelay,OUTPUT);
-  digitalWrite(bladeRelay, LOW);
+  digitalWrite(bladeRelay, HIGH);
   
   //Setup left motor controller inputs & outputs and default to off
   pinMode(leftReverseEnable,OUTPUT);
@@ -153,12 +153,14 @@ void handleSerialMessage(){
       rightWheelDesiredSpeed = defaultDriveSpeed * -1;
     }else if(nextDirection == "v"){ //Not really a direction. May need to go back and clean up variable names to better indicate that this is a command
       Serial.print("Bus Voltage:   "); Serial.print(ina219.getBusVoltage_V()); Serial.println(" V");
-    }else if(nextDirection == "m"){ //Toggle the blade state
-      digitalWrite(bladeRelay, !digitalRead(bladeRelay));
+    }else if(nextDirection == "m on"){ //Toggle the blade state
+      digitalWrite(bladeRelay, LOW);
+    }else if(nextDirection == "m off"){
+      digitalWrite(bladeRelay, HIGH);
     }else if(nextDirection == "stop"){ //Stop
       leftWheelDesiredSpeed = 0;
       rightWheelDesiredSpeed = 0;
-    }else{ //Received an unknown command. Stop and fail safe
+    }else if(nextDirection == "kill"){ //Received a command to die. Stop and fail safe
       haltSafe();
     }
     lastDirection = nextDirection;
@@ -268,7 +270,7 @@ bool hasOvercurrent(){
 //Enters inf loop and requires arduino restart to exit
 void haltSafe(){
   Serial.println("Entered halt safe. Shutting off all motor outputs");
-  digitalWrite(bladeRelay, LOW);
+  digitalWrite(bladeRelay, HIGH);
   digitalWrite(leftReverseEnable, LOW);
   digitalWrite(rightReverseEnable, LOW);
   digitalWrite(leftForwardEnable, LOW);
